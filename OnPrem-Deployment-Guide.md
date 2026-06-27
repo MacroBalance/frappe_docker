@@ -253,7 +253,7 @@ GUNICORN_TIMEOUT=120
 cd ~/frappe_docker
 
 docker compose \
-  --env-file ~/gitops/erpnext.env \
+  --env-file ./gitops/erpnext.env \
   -f compose.yaml \
   -f overrides/compose.mariadb.yaml \
   -f overrides/compose.redis.yaml \
@@ -305,13 +305,58 @@ docker compose --project-name erpnext \
   inventory.macrobalance.in
 ```
 
-This takes **3–8 minutes**. Once complete, ERPNext is running on `localhost:8080` inside WSL2.
+> **MySQL superuser prompt:** The command will ask:
+> ```
+> Enter mysql super user [root]:
+> ```
+> Just press **Enter** to accept the default `root`.
+> The `root` user is **not defined in this project's code** — it is automatically
+> created by the official `mariadb` Docker image when it reads the
+> `MYSQL_ROOT_PASSWORD` env variable (set in `docker-compose.yml`). It is the
+> standard MariaDB superuser that `bench` needs to create the site's database.
+
+This takes **3–8 minutes**. When complete you will see output like:
+
+```
+Installing frappe...
+Updating DocTypes for frappe        : [========================================] 100%
+Creating Workspace Sidebars
+Creating Desktop Icons
+Updating Dashboard for frappe
+
+Installing erpnext...
+Updating DocTypes for erpnext       : [========================================] 100%
+Creating Workspace Sidebars
+Creating Desktop Icons
+Updating Dashboard for erpnext
+inventory.macrobalance.in: SystemSettings.enable_scheduler is UNSET
+*** Scheduler is disabled ***
+```
+
+> **This output is completely normal.** Here is what each message means:
+>
+> | Message | Meaning |
+> |---|---|
+> | `Updating DocTypes … 100%` | Normal schema installation for frappe/erpnext |
+> | `Creating Workspace Sidebars / Desktop Icons` | Standard UI setup |
+> | `SystemSettings.enable_scheduler is UNSET` | Scheduler flag not yet written for this fresh site — expected |
+> | `*** Scheduler is disabled ***` | Will be auto-enabled by the running `scheduler` container; nothing to do |
 
 Test it locally:
 ```bash
-curl http://localhost:8080
+# You MUST pass the correct Host header — nginx routes by site name, not by port.
+# Passing 'localhost' will return 404 because no site is named 'localhost'.
+curl -H "Host: inventory.macrobalance.in" http://localhost:8080
 # Should return HTML (Frappe login page)
 ```
+
+> **Why not just `curl http://localhost:8080`?**
+> The nginx frontend uses `$$host` to identify the site. When you curl without a
+> `Host` header, it sends `localhost` — but the site is named
+> `inventory.macrobalance.in`. Nginx returns `404 – localhost does not exist`.
+> This is expected behaviour, not an error. The actual site is working correctly.
+> Once the Cloudflare Tunnel is set up (Section 8), the real hostname will be
+> forwarded automatically and the site will load normally.
 
 ---
 
